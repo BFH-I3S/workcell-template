@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!--
+  robotiq_hande_module.urdf.xacro
+
+  A Robotiq Hand-E as a module of the template. Robotiq's macro is used as it is;
+  this adds the module's borders around it and the 11 mm coupling between the
+  mount and the gripper, which Robotiq's macro does not have.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find robotiq_description)/urdf/robotiq_hand_e_macro.urdf.xacro"/>
+  <xacro:include filename="$(find workcell_template)/urdf/border.urdf.xacro"/>
+
+  <xacro:property name="robotiq_hande_module_file" value="$(find workcell_template)/modules/robotiq_hande.yaml"/>
+  <xacro:property name="robotiq_hande_module_cfg" value="${xacro.load_yaml(robotiq_hande_module_file)}"/>
+  <xacro:property name="robotiq_hande_coupling_length" value="0.011"/>
+  <xacro:property name="robotiq_hande_coupling_radius" value="0.0375"/>
+
+  <xacro:macro name="robotiq_hande_module" params="parent instance:=gripper name:=RobotiqGripper">
+    <xacro:property name="tcp" value="${robotiq_hande_module_cfg['tcp']}"/>
+    <xacro:module_border type="robotiq_hande" instance="${instance}" role="mount" parent="${parent}"/>
+    <link name="robotiq_hande_coupling_link">
+      <collision>
+        <origin xyz="0 0 ${robotiq_hande_coupling_length / 2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${robotiq_hande_coupling_radius}" length="${robotiq_hande_coupling_length}"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="0 0 ${robotiq_hande_coupling_length / 2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${robotiq_hande_coupling_radius}" length="${robotiq_hande_coupling_length}"/>
+        </geometry>
+      </visual>
+    </link>
+    <joint name="robotiq_hande_coupling_joint" type="fixed">
+      <parent link="${instance}_mount"/>
+      <child link="robotiq_hande_coupling_link"/>
+    </joint>
+    <xacro:robotiq_gripper name="${name}" prefix="" parent="robotiq_hande_coupling_link" include_ros2_control="false">
+      <origin xyz="0 0 ${robotiq_hande_coupling_length}" rpy="0 0 0"/>
+    </xacro:robotiq_gripper>
+    <xacro:module_border type="robotiq_hande" instance="${instance}" role="tcp" parent="${instance}_mount"
+                         xyz="${tcp['xyz'][0]} ${tcp['xyz'][1]} ${tcp['xyz'][2]}"
+                         rpy="${tcp['rpy'][0]} ${tcp['rpy'][1]} ${tcp['rpy'][2]}"/>
+  </xacro:macro>
+</robot>

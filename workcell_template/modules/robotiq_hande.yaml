@@ -1,0 +1,21 @@
+# Module descriptor of a Robotiq Hand-E, from Robotiq's robotiq_description.
+# Used for planning here: no controller, so MoveIt does not move the fingers.
+kind: gripper
+
+# The middle of the finger pads, from the flange, with an 11 mm coupling.
+tcp:
+  xyz: [0.0, 0.0, 0.145]
+  rpy: [0.0, 0.0, 0.0]
+
+frames: {mount: _mount, tcp: _tcp}
+
+joints: [hande_left_finger_joint]
+
+groups:
+  gripper:
+    joints: [hande_left_finger_joint]
+    states:
+      open: {hande_left_finger_joint: 0.0}
+      closed: {hande_left_finger_joint: 0.025}
+
+end_effector: gripper

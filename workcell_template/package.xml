@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>workcell_template</name>
+  <version>0.1.0</version>
+  <description>A convention for where the modules of a robot workcell meet, with a generator of MoveIt's configuration and a checker for the seams.</description>
+  <maintainer email="norman.baier@bfh.ch">Norman Urs Baier</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>moveit_setup_assistant</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>robotiq_description</exec_depend>
+  <exec_depend>ur_description</exec_depend>
+  <exec_depend>ur_moveit_config</exec_depend>
+  <exec_depend>ur_robot_driver</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
+  <test_depend>ament_cmake_pytest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

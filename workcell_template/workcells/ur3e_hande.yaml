@@ -1,0 +1,15 @@
+# An example workcell file: which modules, and where each hangs. After changing
+# this or a descriptor, run tools/generate_workcell.py ur3e_hande; never edit the files
+# it writes to ur3e_hande/.
+modules:
+  arm: {type: ur, model: ur3e, parent: world}
+  gripper: {type: robotiq_hande, parent: tool0}
+
+urdf: {package: workcell_template, file: urdf/ur3e_hande.urdf.xacro, args: {name: ur3e_hande, ur_type: ur3e}}
+root: world
+tcp: {module: gripper}
+
+planning_groups: [ur_manipulator]
+
+variants:
+  real: {}

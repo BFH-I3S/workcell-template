@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!--
+  robotiq_2f_85_module.urdf.xacro
+
+  A Robotiq 2F-85 as a module of the template. Robotiq's macros are used as they
+  are; this adds the module's borders around them, the input border instance_mount
+  and the output border instance_tcp, whose offset is in the descriptor.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find robotiq_description)/urdf/ur_to_robotiq_adapter.urdf.xacro"/>
+  <xacro:include filename="$(find robotiq_description)/urdf/robotiq_2f_85_macro.urdf.xacro"/>
+  <xacro:include filename="$(find workcell_template)/urdf/border.urdf.xacro"/>
+
+  <xacro:property name="robotiq_2f_85_module_file" value="$(find workcell_template)/modules/robotiq_2f_85.yaml"/>
+  <xacro:property name="robotiq_2f_85_module_cfg" value="${xacro.load_yaml(robotiq_2f_85_module_file)}"/>
+
+  <xacro:macro name="robotiq_2f_85_module" params="parent instance:=gripper name:=RobotiqGripper">
+    <xacro:property name="tcp" value="${robotiq_2f_85_module_cfg['tcp']}"/>
+    <xacro:module_border type="robotiq_2f_85" instance="${instance}" role="mount" parent="${parent}"/>
+    <xacro:ur_to_robotiq prefix="" parent="${instance}_mount" child="robotiq_adapter_top_link"/>
+    <xacro:robotiq_gripper name="${name}" prefix="" parent="robotiq_adapter_top_link" include_ros2_control="false">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:robotiq_gripper>
+    <xacro:module_border type="robotiq_2f_85" instance="${instance}" role="tcp" parent="${instance}_mount"
+                         xyz="${tcp['xyz'][0]} ${tcp['xyz'][1]} ${tcp['xyz'][2]}"
+                         rpy="${tcp['rpy'][0]} ${tcp['rpy'][1]} ${tcp['rpy'][2]}"/>
+  </xacro:macro>
+</robot>
