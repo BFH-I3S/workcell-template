@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>cell_description</name>
+  <version>0.0.1</version>
+  <description>
+    What every workcell shares: module descriptors (modules/*.yaml), module
+    wrappers around vendor macros and the template's border and workcell-frame
+    macros (urdf/), and cell_description.composition, which finds a workcell
+    by name (ament index, cell_compositions) and loads its file with the
+    descriptors, for tools/generate_cell.py, tools/check_composition.py and the
+    launch files. Each workcell's own files are in its own package.
+  </description>
+  <maintainer email="norman.baier@bfh.ch">Norman Urs Baier</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <exec_depend>robotiq_description</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <!-- The cells name the packages that describe them (manipulation_skills,
+       gantry_description, ...); those depend on this package, not the
+       other way round. -->
+
+  <test_depend>ament_cmake_pytest</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

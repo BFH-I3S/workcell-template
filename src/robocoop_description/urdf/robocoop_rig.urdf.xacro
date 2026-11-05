@@ -1,0 +1,112 @@
+<?xml version="1.0"?>
+<!--
+  robocoop_rig.urdf.xacro
+
+  The robocoop cell's rig, the workcell's hardware that is in no vendor
+  package, robocoop's second cell (robocoop_cell_2) on parent. Its meshes come
+  from BFH's cell-robocoop at 5f1550a, byte for byte (see the README's Where it
+  came from); the collision boxes are measured on them.
+
+  Gazebo never sees the cell, robocoop_sim's world has its boxes as models of
+  its own (the reasoning is in robocoop.urdf.xacro and robocoop.sdf).
+
+  Keep comments here free of colons (launch_ros reads robot_description as
+  YAML first).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="robocoop_rig" params="parent">
+    <!-- The cell, robocoop's second cell (robocoop_cell_2) an open table with
+         a portal frame across it behind the arm, its play areas and the turning
+         station. Measured on Aufbau_Zelle_SIPBB.stl (world frame)
+           table top at z -0.013, 0.85 x 1.6 m, carcass 0.876 x 1.626 m down to
+           -0.917
+           the arm's base plate, 128 x 128 mm, top at z 0 (the arm's base)
+           portal posts 45 x 45 mm at x +-0.335 to 0.38, y 0.605 to 0.65, beam
+           45 x 45 mm on top, z 0.84 to 0.885
+         Collision is boxes around these (robocoop's own collision_cell.stl is
+         cell 1's enclosure with rear wall and roof, which cell 2 does not have).
+         Left out, all out of the UR3e's reach, the portal's feet (to x 0.407,
+         20 mm high) and corner gussets (to x 0.294, from z 0.79). The play
+         areas lie 3 mm proud of the table top and are not collision geometry.
+         The turning station has no collision mesh in robocoop and gets a box
+         around its mesh (220-280 mm in x, -43-41 mm in y, up to 81 mm). -->
+    <link name="robocoop_cell_link">
+      <visual>
+        <origin xyz="0 0 -0.015" rpy="0 0 1.570796327"/>
+        <geometry>
+          <mesh filename="package://robocoop_description/meshes/Aufbau_Zelle_SIPBB.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="robocoop_silver"><color rgba="0.65 0.65 0.65 1.0"/></material>
+      </visual>
+      <!-- Play areas 10 mm lower than in cell 1, as robocoop_cell_2 places them. -->
+      <visual>
+        <origin xyz="0 0 -0.025" rpy="0 0 1.570796327"/>
+        <geometry>
+          <mesh filename="package://robocoop_description/meshes/play_area_green.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="robocoop_green"><color rgba="0.0 0.75 0.0 1.0"/></material>
+      </visual>
+      <visual>
+        <origin xyz="0 0 -0.025" rpy="0 0 1.570796327"/>
+        <geometry>
+          <mesh filename="package://robocoop_description/meshes/play_area_red.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="robocoop_red"><color rgba="1 0.3 0.3 1.0"/></material>
+      </visual>
+      <!-- Turning station, in metres. -->
+      <visual>
+        <origin xyz="0.250 -0.350 -0.013" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://robocoop_description/meshes/Wendestation_m.stl" scale="1 1 1"/>
+        </geometry>
+        <material name="robocoop_grey"><color rgba="0.5 0.5 0.5 1.0"/></material>
+      </visual>
+      <!-- Link frame = world shifted 0.35 m along y. -->
+      <!-- Table -->
+      <collision>
+        <origin xyz="0 0 -0.465" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.876 1.626 0.904"/>
+        </geometry>
+      </collision>
+      <!-- Base plate -->
+      <collision>
+        <origin xyz="0 -0.350 -0.0065" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.128 0.128 0.013"/>
+        </geometry>
+      </collision>
+      <!-- Portal, posts and beam -->
+      <collision>
+        <origin xyz="-0.3575 0.2775 0.436" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.045 0.045 0.898"/>
+        </geometry>
+      </collision>
+      <collision>
+        <origin xyz="0.3575 0.2775 0.436" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.045 0.045 0.898"/>
+        </geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0.2775 0.8625" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.670 0.045 0.045"/>
+        </geometry>
+      </collision>
+      <!-- Turning station -->
+      <collision>
+        <origin xyz="0.250 -0.351 0.033" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.060 0.084 0.096"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="robocoop_cell_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="robocoop_cell_link"/>
+      <origin xyz="0 0.35 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+</robot>

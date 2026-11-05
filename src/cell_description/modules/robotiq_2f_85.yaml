@@ -1,0 +1,161 @@
+# robotiq_2f_85.yaml
+# ------------------
+# Module descriptor of the Robotiq 2F-85 gripper module
+# (urdf/robotiq_2f_85_module.urdf.xacro): its TCP, and what it adds to a
+# cell's semantics and controllers when a cell composes it (cells/*.yaml,
+# tools/generate_cell.py). The TCP is a property of the gripper, so it lives
+# here, with the module, and not with the skills.
+#
+# Read by the module macro (every description that mounts the gripper).
+#
+# WHERE THE TCP IS
+# The centre of the finger pads, measured on the collision meshes of the
+# UR-to-Robotiq adapter plus 2F-85, with the fingers closed on a 65 mm block,
+# from the flange the module is mounted on (tool0):
+#
+#   pad face spans     129.2 .. 167.2 mm (38 mm pad)
+#   pad centre         148.2 mm   <- the TCP
+#   fingertip bottom   167.2 mm, i.e. 19 mm past the TCP
+#
+# The pads travel along the flange's z as the fingers close (centre 141 mm
+# fully open, 155 mm fully shut), so the TCP is fixed at the grasp the cells
+# actually make rather than at either end of the stroke. (An earlier value of
+# 0.244 m put it 72-86 mm beyond the fingertips.)
+#
+# Change it here and nowhere else.
+tcp:
+  xyz: [0.0, 0.0, 0.148]    # metres, from the module's mount
+  rpy: [0.0, 0.0, 0.0]      # roll, pitch, yaw in radians, URDF <origin> order
+
+module_class: gripper
+
+# Borders (the cell template, cell_description/README.md): the module's input border
+# `mount` and its output borders, by role. A name starting with `_` is the
+# instance's name plus it (`gripper` -> gripper_mount, gripper_tcp).
+frames: {mount: _mount, tcp: _tcp}
+
+joints: [robotiq_85_left_knuckle_joint]
+
+# What the gripper can do (skill_base/capabilities.py). grasp_width is the
+# model's stroke. grip_force and payload are datasheet values, not measured
+# here, hence unverified.
+capabilities:
+  grasp_width: {min: 0.0, max: 0.085}
+  grip_force: {min: 20.0, max: 235.0}
+  payload: 5.0
+unverified: [grip_force, payload]
+
+# How the module announcer tells that the gripper works: its driver
+# (robotiq_gripper_bridge on the real cell, robotiq_gripper_driver with
+# gripper_driver:=urcap, sim_gripper_driver in Gazebo) publishes the finger
+# position at 10 Hz.
+liveness:
+  topic: {name: /gripper/position, type: std_msgs/msg/Float32}
+
+# The module's SRDF group: the one actuated finger joint (the other seven
+# follow it as URDF mimic joints), so open and closed can be named. It is
+# never part of an arm's planning group, or OMPL would be free to open the
+# fingers mid-path. The gripper's links are deliberately not listed: MoveIt
+# checks every robot link for collisions and attaches parts to any link
+# anyway, and listing them pulls the fixed tool0 -> ur_to_robotiq_link joint
+# into this group, after which IK and goal sampling for gripper_tcp failed
+# from the block cell's start pose (14 Oct 2026: both runs with the links
+# failed there, the run with the joint only passed).
+#
+# The five mimic joints are listed too (joints, not links): MoveIt updates
+# only the mimic joints of the group whose values it sets, so RViz's goal
+# state for this group moved the left knuckle alone, the left finger spread
+# away from the rest and showed red, in collision (28 Oct 2026).
+groups:
+  gripper:
+    joints: [robotiq_85_left_knuckle_joint, robotiq_85_right_knuckle_joint, robotiq_85_left_inner_knuckle_joint,
+             robotiq_85_right_inner_knuckle_joint, robotiq_85_left_finger_tip_joint,
+             robotiq_85_right_finger_tip_joint]
+    # 0 is fully open, 0.7929 fully closed (robotiq_description's
+    # gripper_closed_position).
+    states:
+      open: {robotiq_85_left_knuckle_joint: 0.0}
+      closed: {robotiq_85_left_knuckle_joint: 0.7929}
+
+# Collision geometry the module replaces where the description has the
+# fingertip pads (contact_pads): the vanilla fingertip collision mesh is
+# its convex hull, about twice the real fingertip, which overlapped
+# neighbouring cells 60 mm apart in the gantry's box and a cell seated in the
+# next holder hole. With the pad link in the URDF, the SRDF gets
+# disable_default_collisions for the fingertip, so MoveIt checks the pads (the
+# visual mesh in three boxes) instead. {link: replacing link}; nothing is
+# written where the replacing link is absent.
+collision_replacements:
+  robotiq_85_left_finger_tip_link: robotiq_85_left_finger_pad_link
+  robotiq_85_right_finger_tip_link: robotiq_85_right_finger_pad_link
+
+# The gripper as the skills reason about it (condition_skill
+# common/gripper_geometry.py; composition.gripper_geometry hands it every
+# skill node as gripper.*): the commanded stroke when fully closed, finger
+# gap per metre of stroke, the stroke at or below which it counts as open
+# and at or beyond which it has closed on nothing, and how far the
+# fingertips reach past the TCP, open and closed. The full gap is
+# grasp_width's max, the finger joint and its closed value the gripper
+# group's `closed` state.
+geometry:
+  max_stroke: 0.085
+  # The fingertips move on the linkage's arc; measured on the finger meshes
+  # in the gantry simulation. The real gripper's count is linear in the gap
+  # instead (1.11 per metre of this stroke, 2 Nov 2026); its driver
+  # (manipulation_skills robotiq_gripper_driver, open_gap, closed_count)
+  # converts, so this stays the model's.
+  gap_per_stroke: 0.91
+  open_threshold: 0.010
+  closed_threshold: 0.080
+  # The pad boxes in the model: 23.4 mm open, 25.9 mm closed.
+  finger_reach: 0.0234
+  closed_tip_below_tcp: 0.0259
+
+# Robotiq's ros2_control driver on the real cell (manipulation_skills
+# robotiq_gripper.launch.py, robotiq_gripper_bridge): the model name in
+# robotiq_description, and the gripper controller's goal_tolerance in the
+# joint's unit (Robotiq's launch file's per-model value). The driven joint is
+# `joints` above, its closed position the gripper group's `closed` state, the
+# stroke grasp_width's max.
+driver:
+  robotiq_model: 2f_85
+  goal_tolerance: 0.02
+
+# The SRDF end effector: this group, on the link the cell mounts the module
+# on (its `parent`), belonging to the cell's arm group.
+end_effector: gripper
+
+controllers:
+  # In Gazebo the knuckle angle is commanded directly; sim_gripper_driver
+  # turns the skills' stroke in metres into this angle. position_controllers
+  # is gone in Lyrical, a ForwardCommandController on position is the same.
+  sim:
+    robotiq_gripper_controller:
+      type: forward_command_controller/ForwardCommandController
+      params:
+        joints: [robotiq_85_left_knuckle_joint]
+        interface_name: position
+  # On the real cell Robotiq's ros2_control driver runs in a controller
+  # manager of its own (/robotiq/controller_manager, manipulation_skills
+  # robotiq_gripper.launch.py), from robotiq_description's configuration;
+  # robotiq_gripper_bridge gives the skills their GripperCommand on top.
+  # MoveIt reaches the gripper through moveit_controllers below.
+  real:
+    robotiq_gripper_controller:
+      type: robotiq_controllers/GripperActionController
+      params_files: [{package: robotiq_description, file: config/robotiq_controllers.yaml}]
+    robotiq_activation_controller:
+      type: robotiq_controllers/RobotiqActivationController
+      params_files: [{package: robotiq_description, file: config/robotiq_controllers.yaml}]
+
+# What MoveIt executes the gripper group on (RViz's MotionPlanning panel,
+# every variant): manipulation_skills' moveit_gripper_bridge serves
+# gripper_controller/joint_cmd, a GripperCommand in the driven joint's unit,
+# and forwards it as the skills' stroke to whichever driver runs. No
+# ros2_control controller has this name. The group stays out of every arm
+# group, so a plan never moves the fingers along the way.
+moveit_controllers:
+  gripper_controller:
+    type: GripperCommand
+    action_ns: joint_cmd
+    default: true

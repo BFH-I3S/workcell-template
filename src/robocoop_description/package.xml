@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>robocoop_description</name>
+  <version>0.0.1</version>
+  <description>
+    The robocoop cell (BFH): a UR3e with a Robotiq Hand-E in an enclosed
+    table cell with a turning station and two play areas. Composes the
+    vanilla ur_description, cell_description's Hand-E module and the
+    its rig (cell 2's meshes); MoveIt launch for the cell's
+    generated configuration (robocoop_description/cells/robocoop.yaml).
+  </description>
+  <maintainer email="norman.baier@bfh.ch">Norman Urs Baier</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>cell_description</exec_depend>
+  <exec_depend>ur_description</exec_depend>
+  <exec_depend>ur_moveit_config</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+  <exec_depend>moveit_ros_move_group</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

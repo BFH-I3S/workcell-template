@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<!--
+  workcell_frame.urdf.xacro
+
+  The workcell frame, part of the frame contract between a cell and the
+  software that runs in it. Skills, conditions, the planner and the island
+  state express poses and directions in workcell (and the gripper module's
+  TCP frame), never in a module's own frames such as base_link, which may
+  move (an arm on a gantry) or point anywhere (an arm hanging upside down).
+
+  The contract is that workcell is fixed in the cell and its z axis points
+  against gravity. Every cell description places it once, with this macro,
+  on a link that is fixed in the cell (world on robocoop and the ACROBA
+  demonstrator, floor_link on the gantry). On a real cell the UR driver runs
+  with the cell's own description, which carries it.
+
+  Keep comments here free of colons, as in every description that ends up in
+  robot_description (launch_ros first tries to read it as YAML).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="workcell_frame" params="parent xyz:='0 0 0' rpy:='0 0 0'">
+    <link name="workcell"/>
+    <joint name="workcell_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="workcell"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+    </joint>
+  </xacro:macro>
+</robot>

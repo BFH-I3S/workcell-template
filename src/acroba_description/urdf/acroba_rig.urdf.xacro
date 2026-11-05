@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<!--
+  acroba_rig.urdf.xacro
+
+  The ACROBA demonstrator's rig, the workcell's hardware that is in no vendor
+  package (see the README's Where it came from for the mesh)
+
+    the cell         the table with the robot's base plate and the frame
+                     behind the arm, one mesh, on parent
+    the cable cover  the UR5 G5 protector over the tool connector, on flange
+
+  Gazebo never sees the cell, acroba_sim's world has it as a model of its own
+  (the reasoning is in acroba.urdf.xacro and acroba.sdf).
+
+  Keep comments here free of colons (launch_ros reads robot_description as
+  YAML first).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="acroba_rig" params="parent flange">
+    <!-- The cable protector over the tool connector, as the demonstrator's
+         description has it (cable_protection_link, a box, its mesh unused
+         there too). -->
+    <link name="cable_protection_link">
+      <visual>
+        <geometry>
+          <box size="0.034 0.022 0.056"/>
+        </geometry>
+        <material name="acroba_black"><color rgba="0.1 0.1 0.1 1.0"/></material>
+      </visual>
+      <collision>
+        <geometry>
+          <box size="0.034 0.022 0.056"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="cable_protection_joint" type="fixed">
+      <parent link="${flange}"/>
+      <child link="cable_protection_link"/>
+      <origin xyz="0 -0.04 -0.017" rpy="0 0 0"/>
+    </joint>
+
+    <!-- The cell, one mesh in mm, 214 triangles, used for collision as it is.
+         Measured on it (mesh frame)
+           table 656 x 1006 mm, top plate z -3 to 0, carcass down to -993
+           the robot's base plate, a 16-gon of radius 85 mm, z -3 to 7, centred
+           at (0, -312.5)
+           behind the robot a frame across the table, posts 40 x 40 mm at
+           x +-285 to 325, y 415 to 455, up to z 997, a crossbeam at z 830 to
+           870, a panel at z 442 to 758, a box in front of the crossbeam
+           (x -220 to 60, y 315 to 415, z 775 to 920)
+         The arm stands on the base plate, so the mesh frame is at
+         (0, 0.3125, -0.007). The demonstrator's description puts it at
+         (0, 0.312531, 0.01), with the plate's top 17 mm above the arm's base,
+         inside the arm (its SRDF disables base_link_inertia against the cell). -->
+    <link name="acroba_cell_link">
+      <visual>
+        <geometry>
+          <mesh filename="package://acroba_description/meshes/ACROBA_Demonstrator_ROS.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="acroba_white"><color rgba="0.9 0.9 0.9 1.0"/></material>
+      </visual>
+      <collision>
+        <geometry>
+          <mesh filename="package://acroba_description/meshes/ACROBA_Demonstrator_ROS.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="acroba_cell_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="acroba_cell_link"/>
+      <origin xyz="0 0.3125 -0.007" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+</robot>

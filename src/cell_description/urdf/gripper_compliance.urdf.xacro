@@ -1,0 +1,71 @@
+<?xml version="1.0"?>
+<!--
+  gripper_compliance.urdf.xacro
+
+  A simulation-only spring between a flange and the gripper on it, along the
+  flange's z, for any gripper module (robotiq_2f_85_module and
+  robotiq_hande_module, their contact_compliance).
+
+  Why. Under dartsim every contact is rigid and the arm's joints are
+  velocity-driven up to their effort limits, so force mode pressing on a
+  surface met no give at all and the push jumped between 0 and about 1100 N
+  (the wrists' 54 Nm at the fingertips). The real arm yields through its
+  force control and its structure. The spring gives the push a stiffness to
+  regulate against, 50 kN per m (8 N is 0.16 mm), damped near critical for a
+  gripper of about 1 kg. At first 10 kN per m, too soft for grasping (closing
+  fingers held on a part by friction lifted the whole 2F-85 6 mm against the
+  spring instead of squeezing, and the part slipped out). force_mode_sim's
+  admittance is set for this stiffness (linear_admittance 0.0005 in each
+  cell's force_mode_sim.yaml). The rest position is offset by the gripper's
+  own sag when pointing down (mass, kg, everything on the spring), so it sits
+  at 0 there. The TCP stays on the flange; the gripper body moves on the
+  spring, by about a millimetre in use. Planning descriptions leave it off.
+
+  Its position is a state-only ros2_control joint
+  (gripper_compliance_state_joint, in the gripper's Gazebo ros2_control
+  block), so TF follows it. Grasp joints hang parts on robotiq_compliance_link,
+  so a held part's contacts load the spring as the fingertips' do.
+
+  Macros
+    gripper_compliance(prefix, parent, mass)   the link robotiq_compliance_link,
+        the prismatic robotiq_compliance_joint on parent and its Gazebo spring;
+        the gripper is mounted on robotiq_compliance_link
+    gripper_compliance_state_joint(prefix)     the joint's entry in a
+        ros2_control block, position and velocity state only
+
+  Keep comments here free of colons (launch_ros reads robot_description as
+  YAML first).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Stiffness N per m, damping N s per m. -->
+  <xacro:property name="gripper_compliance_stiffness" value="50000.0"/>
+  <xacro:property name="gripper_compliance_damping" value="450.0"/>
+
+  <xacro:macro name="gripper_compliance" params="prefix parent mass">
+    <link name="${prefix}robotiq_compliance_link">
+      <inertial>
+        <mass value="0.01"/>
+        <inertia ixx="1e-6" iyy="1e-6" izz="1e-6" ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+    </link>
+    <joint name="${prefix}robotiq_compliance_joint" type="prismatic">
+      <parent link="${parent}"/>
+      <child link="${prefix}robotiq_compliance_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-0.01" upper="0.01" effort="1000.0" velocity="1.0"/>
+      <dynamics damping="${gripper_compliance_damping}"/>
+    </joint>
+    <gazebo reference="${prefix}robotiq_compliance_joint">
+      <springStiffness>${gripper_compliance_stiffness}</springStiffness>
+      <springReference>${-mass * 9.81 / gripper_compliance_stiffness}</springReference>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:macro name="gripper_compliance_state_joint" params="prefix">
+    <joint name="${prefix}robotiq_compliance_joint">
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+</robot>

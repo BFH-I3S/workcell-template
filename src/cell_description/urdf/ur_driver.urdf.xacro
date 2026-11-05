@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+<!--
+  ur_driver.urdf.xacro
+
+  The UR arm's ros2_control block for the real robot, ur_robot_driver's
+  ur_ros2_control macro (hardware URPositionHardwareInterface, or
+  ros2_control's mock with use_mock_hardware), for any cell whose
+  description is not run in Gazebo. Gazebo's counterpart is ur_gazebo.
+
+  ur_robot_driver builds the robot description itself (ur_rsp.launch.py) from
+  a description_file with its own xacro arguments, so a cell runs on the real
+  robot as
+
+    ros2 launch ur_robot_driver ur_control.launch.py ur_type:=TYPE robot_ip:=IP
+        description_file:=CELL_XACRO kinematics_params_file:=CELL_CALIBRATION
+
+  The cell's description declares the arm's arguments (name, ur_type,
+  tf_prefix, kinematics_params, ...), this file the driver's (robot_ip, the
+  RTDE recipes and URScript, ports, tool communication, mock hardware), with
+  ur_robot_driver's own defaults (its urdf/ur.urdf.xacro). The calibration
+  must be the robot's, the driver compares its hash with the robot's.
+  ur_rsp passes name as the ur_type; the cell's robot name is its root
+  element's and stays.
+
+  Include this file only where the block is wanted (a cell's description,
+  unless sim_gazebo), so a simulation-only machine needs no ur_robot_driver.
+
+  Macro
+    ur_driver(name, tf_prefix, ur_type, kinematics_params, initial_positions)
+        initial_positions is a dict joint name (without prefix) to position,
+        where the mock hardware starts
+
+  Keep comments here free of colons (launch_ros reads robot_description as
+  YAML first).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find ur_robot_driver)/urdf/ur.ros2_control.xacro"/>
+
+  <xacro:arg name="transmission_hw_interface" default=""/>
+  <xacro:arg name="headless_mode" default="false"/>
+  <xacro:arg name="robot_ip" default="0.0.0.0"/>
+  <xacro:arg name="script_filename" default=""/>
+  <xacro:arg name="output_recipe_filename" default=""/>
+  <xacro:arg name="input_recipe_filename" default=""/>
+  <xacro:arg name="reverse_ip" default="0.0.0.0"/>
+  <xacro:arg name="script_command_port" default="50004"/>
+  <xacro:arg name="reverse_port" default="50001"/>
+  <xacro:arg name="script_sender_port" default="50002"/>
+  <xacro:arg name="trajectory_port" default="50003"/>
+  <xacro:arg name="verify_robot_model" default="true"/>
+  <xacro:arg name="blocking_read" default="false"/>
+  <xacro:arg name="use_tool_communication" default="false"/>
+  <xacro:arg name="tool_voltage" default="0"/>
+  <xacro:arg name="tool_parity" default="0"/>
+  <xacro:arg name="tool_baud_rate" default="115200"/>
+  <xacro:arg name="tool_stop_bits" default="1"/>
+  <xacro:arg name="tool_rx_idle_chars" default="1.5"/>
+  <xacro:arg name="tool_tx_idle_chars" default="3.5"/>
+  <xacro:arg name="tool_device_name" default="/tmp/ttyUR"/>
+  <xacro:arg name="tool_tcp_port" default="54321"/>
+  <xacro:arg name="use_mock_hardware" default="false"/>
+  <xacro:arg name="mock_sensor_commands" default="false"/>
+
+  <xacro:macro name="ur_driver" params="name tf_prefix ur_type kinematics_params initial_positions">
+    <xacro:property name="ur_driver_blocking_read" value="$(arg blocking_read)"/>
+    <xacro:ur_ros2_control
+      name="${name}"
+      tf_prefix="${tf_prefix}"
+      kinematics_parameters_file="${kinematics_params}"
+      transmission_hw_interface="$(arg transmission_hw_interface)"
+      use_mock_hardware="$(arg use_mock_hardware)"
+      mock_sensor_commands="$(arg mock_sensor_commands)"
+      headless_mode="$(arg headless_mode)"
+      initial_positions="${initial_positions}"
+      use_tool_communication="$(arg use_tool_communication)"
+      tool_voltage="$(arg tool_voltage)"
+      tool_parity="$(arg tool_parity)"
+      tool_baud_rate="$(arg tool_baud_rate)"
+      tool_stop_bits="$(arg tool_stop_bits)"
+      tool_rx_idle_chars="$(arg tool_rx_idle_chars)"
+      tool_tx_idle_chars="$(arg tool_tx_idle_chars)"
+      tool_device_name="$(arg tool_device_name)"
+      tool_tcp_port="$(arg tool_tcp_port)"
+      robot_ip="$(arg robot_ip)"
+      script_filename="$(arg script_filename)"
+      output_recipe_filename="$(arg output_recipe_filename)"
+      input_recipe_filename="$(arg input_recipe_filename)"
+      reverse_ip="$(arg reverse_ip)"
+      script_command_port="$(arg script_command_port)"
+      reverse_port="$(arg reverse_port)"
+      script_sender_port="$(arg script_sender_port)"
+      trajectory_port="$(arg trajectory_port)"
+      ur_type="${ur_type}"
+      verify_robot_model="$(arg verify_robot_model)"
+      non_blocking_read="${not ur_driver_blocking_read}"/>
+  </xacro:macro>
+</robot>

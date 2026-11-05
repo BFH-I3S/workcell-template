@@ -26,10 +26,10 @@ them changes: one input border, `<instance>_mount`, where it is fastened, and na
 output borders, where others are fastened. `<instance>` is the module's name in this
 workcell, so two grippers get distinct borders.
 
-**Kind.** Each kind must offer certain output borders, so a team knows what to publish
-for its module.
+**Module class.** Each module belongs to one of a few classes, and each class must offer
+certain output borders, so a team knows what to publish for its module.
 
-| Kind | Must offer | What it is for |
+| Class | Must offer | What it is for |
 |---|---|---|
 | carrier | `<i>_output` | the next module rides on it |
 | arm | `base_link`, `tool0` | REP 199's frames; the next module hangs on `tool0` |
@@ -37,10 +37,12 @@ for its module.
 | changer | `<i>_coupling` | the end effector hangs on it |
 | end effector | `<i>_tcp` | what tasks name |
 
-The workcell's own structure (table, frame) is not a module. It is the root of the tree,
-provides the frame `workcell` and the links modules hang on, and names those as it needs.
-A team that needs a new kind can add it. In this repository's code the end effector's
-kind is called `gripper`, so far.
+**Rig.** Whatever in the workcell is not a module is its rig: tables, frames, racks and
+brackets, whoever made or sold them. The rig is mounted on nothing; its fixed part is the
+root of the tree, provides the frame `workcell` and the links modules hang on, and names
+those as it needs. A part of it may move with a module without being one (a cable cover
+on `tool0`). A team that needs a new class can add it. In this repository's code a module's
+class is `module_class` in its descriptor, and the end effector's is called `gripper`, so far.
 
 ### What everyone respects
 
@@ -50,7 +52,7 @@ kind is called `gripper`, so far.
 - A TCP's z points along the tool, because skills approach along it.
 - A mount on another module's output border keeps that border's z, offset only along it
   and turned only about it, so that modules can be exchanged.
-- A mount on the structure may sit as the structure requires, and other outputs may point
+- A mount on the rig may sit as the rig requires, and other outputs may point
   any way (a connector on a module's side).
 
 The arm keeps REP 199's frames, with one departure: REP 199 attaches end effectors to
@@ -70,7 +72,7 @@ frames. A TCP changes with its end effector, and its name does not.
 - **Which way fingers close, or a camera looks.** Left to each vendor.
 - **Stowed end effectors**, and a **moving base**, which has no link fixed in the workcell.
 - **Joints.** The rule covers frames. Skills may still name an arm's joints.
-- **Two active modules of one kind** have not run.
+- **Two active modules of one class** have not run.
 
 ## What it does not do
 

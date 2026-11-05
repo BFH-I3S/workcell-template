@@ -1,0 +1,19 @@
+# Where the Zivid is in the ACROBA cell: the joint camera_mount -> camera_link,
+# camera_mount being on world.
+#
+# From the cell's ROS 1 configuration (demonstrator_ros_setup @ 7ff73d5,
+# acroba_demonstrator_config/launch/zivid_camera.launch, June 2023), which
+# publishes base -> camera_link as
+#   xyz  -0.0033364617 -0.6549384 0.9469535
+#   xyzw  0.9956885341  0.0022090764 0.0073890896 -0.0924384362
+# Here turned into world (base is half a turn about z from base_link, which
+# stands on world). check: the camera looks 10.6 deg off straight down, at the
+# table 0.96 m away along its axis.
+# How it was measured is not recorded, and the cell is out of reach: it holds
+# as long as the camera has not been moved since.
+camera:
+  parent: camera_mount
+  child: camera_link
+  xyz: [0.0033364617, 0.6549384, 0.9469535]
+  rpy: [-2.9564689, -0.0151234, -3.1385593]
+  source: zivid_camera.launch of the ROS 1 configuration, June 2023

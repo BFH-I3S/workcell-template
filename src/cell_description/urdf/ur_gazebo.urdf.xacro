@@ -1,0 +1,145 @@
+<?xml version="1.0"?>
+<!--
+  ur_gazebo.urdf.xacro
+
+  What a UR arm needs in Gazebo, the same in every cell (gantry, robocoop,
+  ACROBA). A cell's description calls ur_gazebo once, with sim_gazebo, after
+  the arm (ur_description's ur_robot) and the gripper module.
+
+  1. The arm's ros2_control block on gz_ros2_control's GazeboSimSystem, with
+     the wrist sensor's interfaces. Written out instead of through
+     ur_simulation_gz's ur_ros2_control macro, whose whole body it
+     reproduces. The macro leaves no way to add a sensor, gz_ros2_control
+     only matches a Gazebo sensor against the block that declares it, and a
+     block of its own is not an option, GazeboSimSystem refuses a block
+     without joints and takes the arm and gripper down with it. The arm
+     starts in the cell's initial_positions. Not the singular arm standing
+     straight up, which ur_simulation_gz defaults to, from which the first IK
+     seeded with the current joints may as well settle elbow down. The
+     joints come from ur_joint_interfaces, no effort command (the reason is
+     there), which works on Humble too.
+
+  2. The wrist force torque sensor, the simulated counterpart of the one
+     built into the UR's flange. On wrist_3_joint rather than the flange,
+     because the URDF to SDF conversion lumps the flange and everything fixed
+     below it into wrist_3_link, and a sensor on a lumped joint has nothing
+     left to measure. wrist_3_joint carries the load the real sensor sees,
+     the gripper, the held part and every contact on them; forces are the
+     same, torques differ by the lever arm, which force_mode_sim accounts
+     for. child_to_parent, so the reading is the load the tool puts on the
+     arm, the convention of force_mode_sim and the force skills.
+     parent_to_child reports the arm's reaction, the opposite sign, and turns
+     force mode into positive feedback that presses harder the harder it
+     presses. The sensor name is the real driver's; tcp_fts_raw_broadcaster
+     publishes it raw, force_mode_sim zeroes it, rotates it into wrist_3_link
+     (sensor_to_frame, measured per cell with ft_frame_calibration, each
+     cell's force_mode_sim.yaml) and republishes it under the real cell's
+     topic. The world needs gz-sim-forcetorque-system, without it
+     gz_ros2_control reads NaN.
+
+  3. The gz_ros2_control plugin, with the cell's generated controller-manager
+     file (simulation_controllers, resolved by the cell's sim launch from
+     <package>/cells/CELL/sim/ros2_controllers.yaml); it declares
+     every controller, the gripper's included. ros_namespace, when given,
+     goes into the plugin's ros block.
+
+  4. Holding a part. A simulated gripper closes on a part but does not hold
+     it. The 2F-85's mimic linkage passes the pads a fraction of the real
+     gripper's squeeze, so a held part twists between them as the arm moves
+     and slides up through the fingers under a few newtons of insertion
+     force. So once the fingers have closed on a part, sim_gripper_driver
+     attaches it rigidly through a DetachableJoint declared here, at the pose
+     it was grasped in, and releases it when the gripper opens. Everything
+     between the part and the world, the insertion contact above all, is
+     still simulated, only slip in the grasp is not, which on the real cell
+     the grip force has to prevent. One joint per graspable model, named
+     after it, the grasp_models of the cell's sim_gripper_driver.yaml
+     (grasp_models_file; the world's parts must match, check_composition.py
+     compares them; empty names are dropped, [""] being the empty list).
+     Gazebo attaches every joint when the robot spawns, and the driver
+     releases them all once Gazebo listens, over Gazebo transport on
+     /sim_grasp/MODEL/attach and detach. grasp_parent is the link a part
+     hangs on, the gripper module's robotiq_compliance_link with its wrist
+     spring (so a held part's contacts load the spring as the fingertips'
+     do), else wrist_3_link.
+
+  Parameters
+    name                     the ros2_control system name of the arm
+    tf_prefix                the arm's joint prefix
+    initial_positions        dict joint name (without prefix) to position
+    simulation_controllers   the controller-manager parameter file
+    grasp_models_file        the cell's sim_gripper_driver.yaml
+    grasp_parent             see 4.
+    ros_namespace            optional, see 3.
+
+  Keep comments here free of colons (launch_ros reads robot_description as
+  YAML first).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find cell_description)/urdf/ur_joint_interfaces.urdf.xacro"/>
+
+  <xacro:macro name="ur_gazebo_grasp_joints" params="models parent">
+    <xacro:if value="${len(models) > 0}">
+      <gazebo>
+        <plugin filename="gz-sim-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
+          <parent_link>${parent}</parent_link>
+          <child_model>${models[0]}</child_model>
+          <child_link>link</child_link>
+          <attach_topic>/sim_grasp/${models[0]}/attach</attach_topic>
+          <detach_topic>/sim_grasp/${models[0]}/detach</detach_topic>
+          <suppress_child_warning>true</suppress_child_warning>
+        </plugin>
+      </gazebo>
+      <xacro:ur_gazebo_grasp_joints models="${models[1:]}" parent="${parent}"/>
+    </xacro:if>
+  </xacro:macro>
+
+  <xacro:macro name="ur_gazebo"
+               params="name tf_prefix initial_positions simulation_controllers
+                       grasp_models_file grasp_parent ros_namespace:=${None}">
+    <!-- 1. -->
+    <ros2_control name="${name}" type="system">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </hardware>
+      <xacro:ur_joint_interfaces tf_prefix="${tf_prefix}" initial_positions="${initial_positions}"/>
+      <sensor name="tcp_fts_sensor">
+        <state_interface name="force.x"/>
+        <state_interface name="force.y"/>
+        <state_interface name="force.z"/>
+        <state_interface name="torque.x"/>
+        <state_interface name="torque.y"/>
+        <state_interface name="torque.z"/>
+      </sensor>
+    </ros2_control>
+
+    <!-- 2. -->
+    <gazebo reference="${tf_prefix}wrist_3_joint">
+      <sensor name="tcp_fts_sensor" type="force_torque">
+        <always_on>true</always_on>
+        <update_rate>500</update_rate>
+        <force_torque>
+          <frame>child</frame>
+          <measure_direction>child_to_parent</measure_direction>
+        </force_torque>
+      </sensor>
+    </gazebo>
+
+    <!-- 3. -->
+    <gazebo>
+      <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>${simulation_controllers}</parameters>
+        <xacro:if value="${ros_namespace is not None}">
+          <ros>
+            <namespace>${ros_namespace}</namespace>
+          </ros>
+        </xacro:if>
+      </plugin>
+    </gazebo>
+
+    <!-- 4. -->
+    <xacro:property name="ur_gazebo_grasp_models"
+        value="${[m for m in xacro.load_yaml(grasp_models_file)['sim_gripper_driver']['ros__parameters']['grasp_models'] if m]}"/>
+    <xacro:ur_gazebo_grasp_joints models="${ur_gazebo_grasp_models}" parent="${grasp_parent}"/>
+  </xacro:macro>
+</robot>

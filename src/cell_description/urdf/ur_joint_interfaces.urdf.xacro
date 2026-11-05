@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!--
+  ur_joint_interfaces.urdf.xacro
+
+  The six UR arm joints of a ros2_control block, with position and velocity
+  command interfaces and position, velocity and effort state interfaces. Our
+  copy of ur_description's ur_joint_control_description
+  (urdf/inc/ur_joint_control.xacro), which Humble's ur_description does not
+  ship. It has its own name so that it never clashes with the upstream macro
+  where that one exists.
+
+  No effort command interface, unlike upstream. Nothing here commands effort,
+  and Humble's gz_ros2_control starts with every declared command mode on and
+  only turns off what a controller releases, so the unclaimed effort command
+  (zero) was applied as a joint force alongside the position control and the
+  arm hung limp.
+
+  initial_positions is a dict keyed by joint name without the prefix, the
+  initial value for simulation and mock hardware.
+
+  Keep comments here free of colons (robot_description is read as YAML first
+  by launch_ros).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="ur_joint_interfaces" params="
+      tf_prefix
+      initial_positions:=${dict(shoulder_pan_joint=0.0,shoulder_lift_joint=-1.57,elbow_joint=0.0,wrist_1_joint=-1.57,wrist_2_joint=0.0,wrist_3_joint=0.0)}">
+    <xacro:macro name="ur_joint_interface" params="joint">
+      <joint name="${tf_prefix}${joint}">
+        <command_interface name="position"/>
+        <command_interface name="velocity"/>
+        <state_interface name="position">
+          <param name="initial_value">${initial_positions[joint]}</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+        <state_interface name="effort"/>
+      </joint>
+    </xacro:macro>
+    <xacro:ur_joint_interface joint="shoulder_pan_joint"/>
+    <xacro:ur_joint_interface joint="shoulder_lift_joint"/>
+    <xacro:ur_joint_interface joint="elbow_joint"/>
+    <xacro:ur_joint_interface joint="wrist_1_joint"/>
+    <xacro:ur_joint_interface joint="wrist_2_joint"/>
+    <xacro:ur_joint_interface joint="wrist_3_joint"/>
+  </xacro:macro>
+</robot>

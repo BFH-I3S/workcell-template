@@ -1,0 +1,91 @@
+# ur.yaml
+# -------
+# Module descriptor of a Universal Robots arm, described by the vanilla
+# ur_description (ur_type picks the model). What it adds to a cell's
+# semantics and controllers when a cell composes it (cells/*.yaml,
+# tools/generate_cell.py).
+
+module_class: arm
+
+joints: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint,
+         wrist_1_joint, wrist_2_joint, wrist_3_joint]
+
+# Borders (the cell template, cell_description/README.md): the module's input border
+# `mount` and its output borders, by role. A name starting with `_` is the
+# instance's name plus it (`gripper` -> gripper_mount, gripper_tcp).
+# The arm's own frames are REP 199's (base_link, tool0); mount is the parent of
+# base_link.
+frames: {mount: _mount, base: base_link, flange: tool0}
+
+# What the arm can do, in the vocabulary of skill_base/capabilities.py.
+# force_sensing: e-Series arms have a built-in wrist force/torque sensor.
+# upright: the base frame points the way workcell does; a cell that mounts
+# the arm differently (hanging, tilted) sets it false.
+capabilities:
+  force_sensing: true
+  upright: true
+# Who serves force control (skills_interfaces/StartForceControl, manipulation_skills'
+# force_control.py), per variant; a variant not listed has none, and the arm's capability
+# force_control says so. controller: what the node switches the arm to.
+force_control:
+  sim: {node: force_mode_sim, controller: forward_velocity_controller}
+  real: {node: ur_force_control, controller: force_mode_controller}
+# Per model: the cell names it on the module (`model: ur16e`), and it must
+# agree with the description's ur_type (checked by check_composition.py).
+# UR datasheets.
+models:
+  ur3e: {capabilities: {payload: 3.0, reach: 0.5}}
+  ur5e: {capabilities: {payload: 5.0, reach: 0.85}}
+  ur16e: {capabilities: {payload: 16.0, reach: 0.90}}
+
+# How the module announcer (cell_description/module_announcer.py) tells that
+# the arm works: its joints are on /joint_states, and the controllers MoveIt
+# executes on by default are active.
+liveness: {joints: true, controllers: true}
+
+# The arm alone, as ur_moveit_config defines it, with its named states.
+groups:
+  ur_manipulator:
+    chain: [base_link, tool0]
+    kinematics:
+      kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
+      kinematics_solver_search_resolution: 0.005
+      kinematics_solver_timeout: 0.005
+    states:
+      home: {shoulder_pan_joint: 0, shoulder_lift_joint: -1.5707, elbow_joint: 0,
+             wrist_1_joint: 0, wrist_2_joint: 0, wrist_3_joint: 0}
+      up: {shoulder_pan_joint: 0, shoulder_lift_joint: -1.5707, elbow_joint: 0,
+           wrist_1_joint: -1.5707, wrist_2_joint: 0, wrist_3_joint: 0}
+      test_configuration: {shoulder_pan_joint: 1.54, shoulder_lift_joint: -1.62, elbow_joint: 1.4,
+                           wrist_1_joint: -1.2, wrist_2_joint: -1.6, wrist_3_joint: -0.11}
+
+# Acceleration limits (5 rad/s^2, UR publishes none); velocity and position
+# limits come from the URDF.
+joint_limits:
+  - {package: ur_moveit_config, file: config/joint_limits.yaml}
+
+controllers:
+  # Gazebo (gz_ros2_control). ScaledJointTrajectoryController is gone from
+  # ur_controllers in Lyrical; the arm controller keeps its name, which MoveIt
+  # and the skills use, and is a plain JointTrajectoryController. Joints and
+  # tolerances come from ur_simulation_gz's file.
+  sim:
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+    scaled_joint_trajectory_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+      params_files: [{package: ur_simulation_gz, file: config/ur_controllers.yaml}]
+      moveit: {default: true}
+  # The real arm: ur_robot_driver starts its own controller manager from its
+  # own file, so only the controllers MoveIt executes on are listed. Lyrical's
+  # driver has no scaled_joint_trajectory_controller any more; its
+  # joint_trajectory_controller scales with the speed slider itself and is
+  # its initial controller (ur_control.launch.py initial_joint_controller).
+  # Until 24 Oct 2026 this listed the scaled one as MoveIt's default, which
+  # the driver never starts (found running the driver's mock hardware). A
+  # cell with its own controller file (the gantry) lists its own.
+  real:
+    joint_trajectory_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+      params_files: [{package: ur_robot_driver, file: config/ur_controllers.yaml}]
+      moveit: {default: true}

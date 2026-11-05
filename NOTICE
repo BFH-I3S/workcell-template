@@ -1,2 +1,6 @@
 Workcell template
 Copyright 2026 Berner Fachhochschule (BFH)
+
+The meshes in src/acroba_description/meshes/ come from BFH's demonstrator_ros_setup
+(commit 7ff73d5) and those in src/robocoop_description/meshes/ from BFH's cell-robocoop
+(commit 5f1550a), byte for byte; see each package's README.

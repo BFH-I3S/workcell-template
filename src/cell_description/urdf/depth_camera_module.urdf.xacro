@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<!--
+  depth_camera_module.urdf.xacro
+
+  A depth camera fixed in a cell, as a module of the cell template
+  (cell_description/README.md). Which camera comes from its type, the name of its
+  descriptor modules/type.yaml, which gives the housing. Where it is comes
+  from calibration_file, the cell's own file for this camera
+
+    camera
+      parent    camera_mount
+      child     camera_link
+      xyz       metres
+      rpy       radians
+      status    estimate until a hand-eye calibration has measured it
+      source    how the numbers were found
+
+  The mount is a border on the parent, the camera's own frame hangs on it at
+  the calibrated pose, so a new calibration or a new camera moves nothing else.
+  The frame has z out of the lens, x along the image right, y along its down.
+
+  MoveIt keeps the housing as collision geometry. With sim_gazebo the link also
+  gets the housing's inertial, without which Gazebo refuses the description (a
+  chain of two links without inertials, mount and camera, leaves a dangling
+  frame, and the robot is not spawned). The camera stands fixed in the cell, so
+  the mass moves nothing. This gives Gazebo the housing, no images.
+
+  Keep comments here free of colons (launch_ros reads robot_description as
+  YAML first).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find cell_description)/urdf/border.urdf.xacro"/>
+  <xacro:property name="depth_camera_modules_dir" value="$(find cell_description)/modules"/>
+
+  <xacro:macro name="depth_camera_module" params="type parent calibration_file instance:=camera sim_gazebo:=false">
+    <xacro:property name="descriptor" value="${xacro.load_yaml(depth_camera_modules_dir + '/' + type + '.yaml')}"/>
+    <xacro:property name="pose" value="${xacro.load_yaml(calibration_file)[instance]}"/>
+    <xacro:property name="body" value="${descriptor['body']}"/>
+
+    <xacro:module_border type="${type}" instance="${instance}" role="mount" parent="${parent}"/>
+
+    <link name="${instance}_link">
+      <xacro:if value="${sim_gazebo}">
+        <xacro:property name="m" value="${body['mass']}"/>
+        <xacro:property name="sx" value="${body['size'][0]}"/>
+        <xacro:property name="sy" value="${body['size'][1]}"/>
+        <xacro:property name="sz" value="${body['size'][2]}"/>
+        <inertial>
+          <origin xyz="${body['xyz'][0]} ${body['xyz'][1]} ${body['xyz'][2]}" rpy="0 0 0"/>
+          <mass value="${m}"/>
+          <inertia ixx="${m * (sy*sy + sz*sz) / 12.0}" ixy="0" ixz="0"
+                   iyy="${m * (sx*sx + sz*sz) / 12.0}" iyz="0"
+                   izz="${m * (sx*sx + sy*sy) / 12.0}"/>
+        </inertial>
+      </xacro:if>
+      <visual>
+        <origin xyz="${body['xyz'][0]} ${body['xyz'][1]} ${body['xyz'][2]}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${body['size'][0]} ${body['size'][1]} ${body['size'][2]}"/>
+        </geometry>
+        <material name="${instance}_grey"><color rgba="0.3 0.3 0.3 1.0"/></material>
+      </visual>
+      <collision>
+        <origin xyz="${body['xyz'][0]} ${body['xyz'][1]} ${body['xyz'][2]}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${body['size'][0]} ${body['size'][1]} ${body['size'][2]}"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="${instance}_mount_to_${instance}_link" type="fixed">
+      <parent link="${pose['parent']}"/>
+      <child link="${pose['child']}"/>
+      <origin xyz="${pose['xyz'][0]} ${pose['xyz'][1]} ${pose['xyz'][2]}"
+              rpy="${pose['rpy'][0]} ${pose['rpy'][1]} ${pose['rpy'][2]}"/>
+    </joint>
+  </xacro:macro>
+</robot>

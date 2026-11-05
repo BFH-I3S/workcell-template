@@ -1,0 +1,4 @@
+# Third-party packages kept in this repository, each byte for byte as published
+# (tools/check_vendored.py checks them). None: the UR packages come from apt and
+# Robotiq's from its own repository at a pinned commit (README, Try it).
+packages: {}

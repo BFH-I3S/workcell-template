@@ -1,0 +1,306 @@
+<?xml version="1.0"?>
+<!--
+  robotiq_hande_module.urdf.xacro
+
+  The Robotiq Hand-E as a module of a work cell. It wraps the vanilla
+  robotiq_description macro (Robotiq's robotiq-ros, never edit that package,
+  see third_party/vendored.yaml) and adds what a cell needs on top of it
+
+  1. The UR coupling between the flange and the gripper, 11 mm. Robotiq's
+     macro starts at the gripper's own base. 11 mm is measured by matching
+     the housing of Robotiq's mesh to the robocoop cell's CAD of its
+     assembly, which includes the coupling (mean profile error 0.19 mm, see
+     modules/robotiq_hande.yaml).
+
+  2. The module's borders (border.urdf.xacro), instance_mount on parent and
+     the TCP instance_tcp on it, with the offset from
+     modules/robotiq_hande.yaml (pad centre, 145 mm from the mount).
+     Robotiq's macro has its own tcp_link 1.5 mm higher; skills use
+     gripper_tcp.
+
+  3. With sim_gazebo, a mass for each finger. The vanilla finger links have no
+     inertial block, and the URDF to SDF conversion drops a massless link
+     together with its joint, so Gazebo had no fingers and gz_ros2_control
+     crashed writing to the missing joint (segfault in GazeboSimSystem write,
+     Oct 2026). Each finger gets a child link with 30 g (a guess, the
+     datasheet gives only the gripper's 1 kg) on a fixed joint, which the
+     conversion lumps into the finger. Planning descriptions leave it out.
+
+  4. With contact_pads, simulation-only pads, as the 2F-85 module has them.
+     bullet-featherstone collides a mesh as its convex hull, and the Hand-E's
+     finger mesh is an L, the slider inside the body reaching 34 mm inward
+     above the pad. Its hull filled the space between pad and slider; open,
+     it reached 4 mm into a 40 mm brick and pushed it away on the approach,
+     and closing, the two hulls met with the fingers 1.3 mm in (Oct 2026). So
+     each finger's mesh collides with nothing in Gazebo, and two boxes of its
+     own carry the collisions, measured on the finger mesh (finger frame, the
+     inner side towards the other finger) the gripping pad, 6 mm thick from
+     the inner face at x 0, 21 mm wide, 23 to 47 mm down, and the finger body
+     above it, stepped back 6 to 10.8 mm, 3 to 23 mm down. A link of its own
+     on a fixed joint kept in Gazebo (preserveFixedJoint), since collision
+     masks act per link in bullet-featherstone. Planning descriptions leave
+     them out, FCL uses the meshes as they are.
+
+  5. With sim_gazebo and include_ros2_control, the gripper's ros2_control
+     block comes from this module, not from the vanilla macro: the vanilla
+     block's Gazebo variant with the finger's command limits off, as the
+     2F-85 module does and for the same reason. Since Lyrical the controller
+     manager clamps a position command to one control period at the URDF
+     velocity limit ahead of the finger, 0.15 mm at 0.075 m per s and 500 Hz;
+     the fingers crept, an empty close stalled at 7 mm of the 50 mm stroke
+     and an open timed out 3.5 mm short (Oct 2026). Gazebo still holds the
+     joint inside its URDF limits. Under bullet-featherstone the right
+     finger is left out of the block, the engine's mimic constraint alone
+     moves it (see the block). With drive_mimic_finger (dartsim, which has
+     no mimic constraints) it is listed, and gz_ros2_control drives it after
+     the left one, as it drives the 2F-85's mimic joints on the gantry.
+
+  6. For dartsim, as the 2F-85 module on the gantry (the reasoning is there,
+     3. and 4.). With raise_finger_velocity_limits both fingers get 1 m per s
+     as their velocity limit in the physics engine
+     (cell_description.gz_joint_velocity_limits), the URDF's 0.075 stays.
+     dartsim drops a joint's velocity command, which is how gz_ros2_control
+     drives it, while the joint is at its velocity limit, and the finger then
+     coasts; the gripper's speed comes from sim_gripper_driver's ramp. It
+     also drops it at a position limit, and the Hand-E is commanded to
+     exactly its URDF limits, 0 and 0.025, so the engine's position limits
+     are widened by 2 mm each way. Without that a finger opened or closed
+     fully stayed there, and the right finger, starting at 0, never followed
+     the left one (Oct 2026). With
+     contact_compliance a spring between the flange and the coupling, along
+     the flange's z (robotiq_compliance_joint, prismatic, passive, a
+     state-only ros2_control joint), 50 kN per m, damped near critical for
+     the 1.03 kg on it (coupling, gripper, fingers), its rest position offset
+     by that weight's sag. dartsim contacts are rigid, and force mode against
+     a surface without it jumps between nothing and the arm's effort limits.
+     The spring is the shared gripper_compliance macro
+     (gripper_compliance.urdf.xacro, the reasoning is there). The TCP stays on
+     the flange. Planning descriptions leave all of it off.
+
+  The fingers are the vanilla macro's two prismatic joints (the right one
+  mimics the left), 0 open to 0.025 closed per finger. Where /joint_states
+  does not carry them, the planning scene holds them at 0, fully open, the
+  widest footprint, as for the 2F-85's knuckle.
+
+  Parameters, the same names as robotiq_2f_85_module's
+    prefix                 link name prefix
+    parent                 the output border the module's mount hangs on
+                           (tool0 on a UR)
+    instance               the module's name in the cell, the borders' prefix
+                           (gripper gives gripper_mount and gripper_tcp)
+    name                   ros2_control system name of the gripper
+    include_ros2_control   with sim_gazebo, the module's own block (5.),
+                           otherwise passed to the vanilla macro (its driver
+                           talks to the gripper over RS-485, com_port)
+    com_port               passed to the vanilla macro
+    sim_gazebo             passed to the vanilla macro; also the finger masses
+                           (3.)
+    contact_pads           the simulation-only pads (4.)
+    contact_compliance     the simulation-only wrist spring (6.)
+    drive_mimic_finger     with the module's own Gazebo block, list the right
+                           finger (5.); default false, under bullet-featherstone
+                           listing it made the two fight, under dartsim it is
+                           needed
+    raise_finger_velocity_limits
+                           in Gazebo, raise the fingers' velocity limits and
+                           widen their position limits (6.)
+  No pad_compliance, the 2F-85 module's yielding rubber layers (and with them
+  sim_gripper_driver's force-limited grip); grasps on robocoop did not need it.
+
+  Keep comments here free of colons (launch_ros reads robot_description as
+  YAML first).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="$(find robotiq_description)/urdf/robotiq_hand_e_macro.urdf.xacro"/>
+  <xacro:include filename="$(find cell_description)/urdf/gripper_compliance.urdf.xacro"/>
+  <xacro:include filename="$(find cell_description)/urdf/border.urdf.xacro"/>
+
+  <!-- Two steps, see robotiq_2f_85_module.urdf.xacro. -->
+  <xacro:property name="robotiq_hande_module_file" value="$(find cell_description)/modules/robotiq_hande.yaml"/>
+  <xacro:property name="robotiq_hande_module_cfg" value="${xacro.load_yaml(robotiq_hande_module_file)}"/>
+
+  <!-- See 1. above. Round, the gripper's 75 mm. -->
+  <xacro:property name="robotiq_hande_coupling_length" value="0.011"/>
+  <xacro:property name="robotiq_hande_coupling_radius" value="0.0375"/>
+
+  <!-- See 4. above. inward is +1 for the left finger, whose inner side is +x,
+       and -1 for the right one. -->
+  <xacro:property name="robotiq_hande_pad_mu" value="0.8"/>
+  <xacro:macro name="robotiq_hande_contact_pad" params="prefix side inward">
+    <link name="${prefix}hande_${side}_finger_pad_link">
+      <inertial>
+        <mass value="0.005"/>
+        <inertia ixx="1e-6" iyy="1e-6" izz="1e-6" ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+      <!-- Unnamed, sdformat calls them link_collision and _collision_1. -->
+      <collision>
+        <origin xyz="${-inward * 0.003} 0 0.035" rpy="0 0 0"/>
+        <geometry><box size="0.006 0.021 0.024"/></geometry>
+      </collision>
+      <collision>
+        <origin xyz="${-inward * 0.0084} 0 0.013" rpy="0 0 0"/>
+        <geometry><box size="0.0048 0.021 0.020"/></geometry>
+      </collision>
+    </link>
+    <joint name="${prefix}hande_${side}_finger_pad_joint" type="fixed">
+      <parent link="${prefix}hande_${side}_finger"/>
+      <child link="${prefix}hande_${side}_finger_pad_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+    <gazebo reference="${prefix}hande_${side}_finger_pad_joint">
+      <preserveFixedJoint>true</preserveFixedJoint>
+    </gazebo>
+    <gazebo reference="${prefix}hande_${side}_finger_pad_link">
+      <xacro:property name="mu" value="${robotiq_hande_pad_mu}"/>
+      <collision name="${prefix}hande_${side}_finger_pad_link_collision">
+        <surface><friction><ode><mu>${mu}</mu><mu2>${mu}</mu2></ode><bullet><friction>${mu}</friction><friction2>${mu}</friction2></bullet></friction></surface>
+      </collision>
+      <collision name="${prefix}hande_${side}_finger_pad_link_collision_1">
+        <surface><friction><ode><mu>${mu}</mu><mu2>${mu}</mu2></ode><bullet><friction>${mu}</friction><friction2>${mu}</friction2></bullet></friction></surface>
+      </collision>
+    </gazebo>
+    <gazebo reference="${prefix}hande_${side}_finger">
+      <collision name="${prefix}hande_${side}_finger_collision">
+        <surface><contact><collide_bitmask>0x00</collide_bitmask></contact></surface>
+      </collision>
+    </gazebo>
+  </xacro:macro>
+
+  <!-- See 6. above. The mass on the spring (coupling 0.1, gripper 0.864,
+       fingers and pads 0.07) for its rest offset. -->
+  <xacro:property name="robotiq_hande_compliance_mass" value="1.034"/>
+
+  <!-- See 5. above. -->
+  <xacro:macro name="robotiq_hande_gazebo_ros2_control" params="name prefix drive_mimic:=false compliance:=false">
+    <ros2_control name="${name}" type="system">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </hardware>
+      <joint name="${prefix}hande_left_finger_joint">
+        <limits enable="false"/>
+        <command_interface name="position"/>
+        <state_interface name="position">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+      <!-- Under bullet-featherstone the right finger is not listed. It mimics
+           the left one in the URDF, which bullet-featherstone turns into a
+           constraint; listed here as well, gz_ros2_control drove it too, and
+           the two fought, the fingers crawling at 0.5 mm per s (the 2F-85's
+           revolute mimic joints do not show this). dartsim has no mimic
+           constraints, so there it is listed and gz_ros2_control drives it. -->
+      <xacro:if value="${drive_mimic}">
+        <joint name="${prefix}hande_right_finger_joint"/>
+      </xacro:if>
+      <xacro:if value="${compliance}">
+        <!-- Passive, see 6. above. State only, so TF follows the spring. -->
+        <xacro:gripper_compliance_state_joint prefix="${prefix}"/>
+      </xacro:if>
+    </ros2_control>
+  </xacro:macro>
+
+  <!-- See 3. above. -->
+  <xacro:macro name="robotiq_hande_finger_mass" params="prefix side">
+    <link name="${prefix}hande_${side}_finger_mass">
+      <inertial>
+        <origin xyz="0 0 0.02" rpy="0 0 0"/>
+        <mass value="0.03"/>
+        <inertia ixx="5e-6" iyy="5e-6" izz="2e-6" ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+    </link>
+    <joint name="${prefix}hande_${side}_finger_mass_joint" type="fixed">
+      <parent link="${prefix}hande_${side}_finger"/>
+      <child link="${prefix}hande_${side}_finger_mass"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="robotiq_hande_module"
+               params="prefix:='' parent instance:=gripper name:=RobotiqGripperHardwareInterface include_ros2_control:=false
+                       com_port:=/dev/ttyUSB0 sim_gazebo:=false contact_pads:=false
+                       contact_compliance:=false
+                       drive_mimic_finger:=false raise_finger_velocity_limits:=false">
+    <xacro:property name="frames" value="${robotiq_hande_module_cfg['frames']}"/>
+    <xacro:property name="mount" value="${prefix}${instance}${frames['mount']}"/>
+    <xacro:border name="${mount}" parent="${parent}"/>
+    <xacro:property name="coupling_parent" value="${mount}"/>
+    <xacro:if value="${contact_compliance}">
+      <xacro:gripper_compliance prefix="${prefix}" parent="${mount}" mass="${robotiq_hande_compliance_mass}"/>
+      <xacro:property name="coupling_parent" value="${prefix}robotiq_compliance_link"/>
+    </xacro:if>
+    <link name="${prefix}robotiq_hande_coupling_link">
+      <visual>
+        <origin xyz="0 0 ${robotiq_hande_coupling_length / 2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${robotiq_hande_coupling_radius}" length="${robotiq_hande_coupling_length}"/>
+        </geometry>
+        <material name="robotiq_hande_coupling_grey">
+          <color rgba="0.3 0.3 0.3 1.0"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${robotiq_hande_coupling_length / 2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="${robotiq_hande_coupling_radius}" length="${robotiq_hande_coupling_length}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <origin xyz="0 0 ${robotiq_hande_coupling_length / 2}" rpy="0 0 0"/>
+        <mass value="0.1"/>
+        <inertia ixx="4e-5" iyy="4e-5" izz="7e-5" ixy="0" ixz="0" iyz="0"/>
+      </inertial>
+    </link>
+    <joint name="${prefix}robotiq_hande_coupling_joint" type="fixed">
+      <parent link="${coupling_parent}"/>
+      <child link="${prefix}robotiq_hande_coupling_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <xacro:property name="own_ros2_control" value="${sim_gazebo and include_ros2_control}"/>
+    <xacro:robotiq_gripper
+        name="${name}"
+        prefix="${prefix}"
+        parent="${prefix}robotiq_hande_coupling_link"
+        include_ros2_control="${include_ros2_control and not own_ros2_control}"
+        sim_gazebo="${sim_gazebo}"
+        com_port="${com_port}">
+      <origin xyz="0 0 ${robotiq_hande_coupling_length}" rpy="0 0 0"/>
+    </xacro:robotiq_gripper>
+
+    <xacro:if value="${own_ros2_control}">
+      <xacro:robotiq_hande_gazebo_ros2_control name="${name}" prefix="${prefix}"
+                                               drive_mimic="${drive_mimic_finger}"
+                                               compliance="${contact_compliance}"/>
+      <!-- See 6. above. -->
+      <xacro:if value="${raise_finger_velocity_limits}">
+        <gazebo>
+          <plugin filename="gz-sim-python-system-loader-system" name="gz::sim::systems::PythonSystemLoader">
+            <module_name>cell_description.gz_joint_velocity_limits</module_name>
+            <joints>${prefix}hande_left_finger_joint ${prefix}hande_right_finger_joint</joints>
+            <velocity>1.0</velocity>
+            <position_limits>-0.002 0.027</position_limits>
+          </plugin>
+        </gazebo>
+      </xacro:if>
+    </xacro:if>
+    <xacro:if value="${sim_gazebo}">
+      <xacro:robotiq_hande_finger_mass prefix="${prefix}" side="left"/>
+      <xacro:robotiq_hande_finger_mass prefix="${prefix}" side="right"/>
+    </xacro:if>
+    <xacro:if value="${contact_pads}">
+      <xacro:robotiq_hande_contact_pad prefix="${prefix}" side="left" inward="1"/>
+      <xacro:robotiq_hande_contact_pad prefix="${prefix}" side="right" inward="-1"/>
+    </xacro:if>
+
+    <xacro:property name="tcp" value="${robotiq_hande_module_cfg['tcp']}"/>
+    <xacro:property name="tcp_frame" value="${prefix}${instance}${frames['tcp']}"/>
+    <link name="${tcp_frame}"/>
+    <joint name="${tcp_frame}_joint" type="fixed">
+      <parent link="${mount}"/>
+      <child link="${tcp_frame}"/>
+      <origin xyz="${tcp['xyz'][0]} ${tcp['xyz'][1]} ${tcp['xyz'][2]}"
+              rpy="${tcp['rpy'][0]} ${tcp['rpy'][1]} ${tcp['rpy'][2]}"/>
+    </joint>
+  </xacro:macro>
+</robot>

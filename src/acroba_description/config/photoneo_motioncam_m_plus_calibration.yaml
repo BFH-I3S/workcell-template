@@ -1,0 +1,10 @@
+# Where the Photoneo is in the ACROBA cell: the joint camera_mount -> camera_link.
+# An estimate, not a measurement: the cell is out of reach. Above the frame's
+# crossbeam, looking down at the table. Replace it with a hand-eye calibration.
+camera:
+  parent: camera_mount
+  child: camera_link
+  xyz: [0.15, 0.68, 0.95]
+  rpy: [2.7416, 0.0, 0.0]
+  status: estimate
+  source: placed by hand, not measured

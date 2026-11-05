@@ -1,0 +1,81 @@
+# robocoop.yaml
+# -------------
+# The robocoop cell (BFH): a UR3e with a Robotiq Hand-E on an open table with
+# a portal frame, a turning station and two play areas (robocoop_description,
+# which also holds the rig: robocoop's second cell, robocoop_cell_2).
+#
+# A cell composition: which modules the cell is made of and how they are put
+# together. tools/generate_cell.py turns it, with the module descriptors in
+# cell_description/modules, into the cell's SRDF, kinematics, joint limits, MoveIt
+# controller list and controller-manager parameters, one set per variant in
+# robocoop/<variant>/. tools/check_composition.py checks the result. Edit this
+# file or a module descriptor, then regenerate; never edit the generated
+# files. The format is described in cell_description/README.md.
+
+modules:
+  # Borders (cell_description/README.md, the cell template): each module's mount hangs on
+  # its parent; arm_mount on the cell's world, gripper_mount on tool0.
+  arm: {type: ur, model: ur3e, parent: world,
+        calibration: {package: robocoop_description, file: config/ur3e_calibration.yaml}}
+  gripper: {type: robotiq_hande, parent: tool0}
+
+# safety_limits: the UR joints' soft limits, 0.15 rad inside the hard ones,
+# which the UR driver's ros2_control enforces by default (see gantry.yaml).
+urdf: {package: robocoop_description, file: urdf/robocoop.urdf.xacro,
+       args: {name: robocoop, ur_type: ur3e, safety_limits: 'true', safety_pos_margin: '0.15'}}
+root: world
+tcp: {module: gripper}        # gripper_tcp, the gripper's tcp border
+
+groups:
+  ur_manipulator:
+    states:
+      # robocoop's "Home": the arm folded over the table.
+      robocoop_home: {shoulder_pan_joint: 1.5707, shoulder_lift_joint: -1.5707, elbow_joint: 1.5707,
+                      wrist_1_joint: -1.5707, wrist_2_joint: -1.5707, wrist_3_joint: 0}
+planning_groups: [ur_manipulator]
+
+# The robocoop MoveIt configuration's position limits (robocoop_moveit_config
+# joint_limits.yaml): shoulder to the table side, elbow up, wrists on one
+# side, so plans stay in the configurations the cell was set up for (first
+# for robocoop's enclosed cell 1, with walls and roof). wrist_3 keeps the
+# URDF's. Where they reached past the UR soft limits (0.15 rad inside the
+# hard ones, which ros2_control enforces) they stop there instead: robocoop
+# allowed elbow up to pi and wrist_1 down to -2 pi, a goal the controller
+# never reaches (check_composition.py's position-limits check).
+joint_limits:
+  - joint_limits:
+      shoulder_pan_joint: {has_position_limits: true, min_position: -1.5707963267948966, max_position: 3.141592653589793}
+      shoulder_lift_joint: {has_position_limits: true, min_position: -3.141592653589793, max_position: 0.0}
+      elbow_joint: {has_position_limits: true, min_position: 0.0, max_position: 2.991592653589793}
+      wrist_1_joint: {has_position_limits: true, min_position: -6.133185307179586, max_position: 0.0}
+      wrist_2_joint: {has_position_limits: true, min_position: -3.141592653589793, max_position: 0.0}
+
+variants:
+  # Gazebo (robocoop_sim). MoveIt plans with the plain description; Gazebo
+  # runs it with sim_gazebo (ros2_control blocks, wrist sensor, grasp joints).
+  sim:
+    controller_manager: {update_rate: 500}
+    controllers:
+      # As in every simulated UR cell: the force-mode stand-in (force_mode_sim) needs
+      # the arm controller to start from the measured state, and a velocity
+      # controller to switch to; the wrist sensor gets a broadcaster.
+      scaled_joint_trajectory_controller:
+        params_files:
+          - {package: ur_simulation_gz, file: config/ur_controllers.yaml}
+          - {package: manipulation_skills, file: config/sim_force_controllers.yaml}
+      forward_velocity_controller:
+        type: forward_command_controller/ForwardCommandController
+        params_files: [{package: ur_simulation_gz, file: config/ur_controllers.yaml}]
+      tcp_fts_raw_broadcaster:
+        type: force_torque_sensor_broadcaster/ForceTorqueSensorBroadcaster
+        params_files: [{package: manipulation_skills, file: config/sim_force_controllers.yaml}]
+    gazebo:
+      urdf_args: {sim_gazebo: 'true', simulation_controllers: unused}
+      grasp:
+        worlds:
+          - {package: robocoop_sim, file: worlds/robocoop.sdf}
+        graspable: 'brick_\d+'
+        driver_params: {package: robocoop_sim, file: config/sim_gripper_driver.yaml}
+  # The real cell, with ur_robot_driver (tf_prefix empty) and the robot's
+  # calibration (robocoop_description/config/ur3e_calibration.yaml).
+  real: {}

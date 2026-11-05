@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+<!--
+  robocoop.urdf.xacro
+
+  The robocoop cell (BFH), composed as every cell here is
+  (robocoop_description/cells/robocoop.yaml)
+
+    world        the robot base at the origin, on the base plate (the cell
+                 table's top is 13 mm lower)
+    ur3e         the vanilla ur_description, unprefixed (base_link, tool0)
+    Hand-E       cell_description's robotiq_hande_module on tool0, with the
+                 TCP gripper_tcp
+    workcell     on world, identity
+    the rig      robocoop_rig.urdf.xacro, robocoop's second cell
+                 (robocoop_cell_2, open table with a portal), its meshes
+                 placed as robocoop's own macro places them (0.35 m along y,
+                 a quarter turn, 15 mm down), with box collisions
+
+  Not the robocoop repository's own macro, which instantiates the UR3e itself
+  with tf_prefix ur3e_ and the gripper as a static link; the skills and the
+  composition expect an unprefixed arm and a gripper module. On the real cell
+  the UR driver therefore runs with an empty tf_prefix.
+
+  The arm's kinematics default to the real UR3e's calibration
+  (config/ur3e_calibration.yaml, from robocoop_cell_control), so plans match
+  the arm the driver runs.
+
+  With sim_gazebo (robocoop_sim) the description also carries what Gazebo
+  needs, the arm's from cell_description's ur_gazebo macro and the gripper's
+  from its module, as in every cell (the reasoning is in those files)
+    the arm's ros2_control block on GazeboSimSystem, with the wrist force
+    torque sensor on wrist_3_joint, starting in robocoop_home
+    the gz_ros2_control plugin, with the cell's generated controller file
+    (simulation_controllers)
+    the Hand-E module's Gazebo ros2_control block, fingertip pads, and for
+    dartsim the right finger driven by gz_ros2_control (no mimic
+    constraints there), raised finger velocity limits and the wrist spring
+    one DetachableJoint per graspable brick, the grasp_models of
+    robocoop_sim's sim_gripper_driver.yaml
+
+  Keep comments here free of colons (launch_ros reads robot_description as
+  YAML first).
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="robocoop">
+  <!-- The arm, from ur_description's macro, as on the gantry; the same
+       arguments and defaults as ur_description's own ur.urdf.xacro, except
+       name and the calibrated kinematics. Mesh paths absolute in Gazebo only,
+       which resolves them without GZ_SIM_RESOURCE_PATH; RViz and MoveIt keep
+       package URIs. -->
+  <xacro:arg name="name" default="robocoop"/>
+  <xacro:arg name="ur_type" default="ur3e"/>
+  <xacro:arg name="tf_prefix" default=""/>
+  <xacro:arg name="joint_limit_params" default="$(find ur_description)/config/$(arg ur_type)/joint_limits.yaml"/>
+  <xacro:arg name="kinematics_params" default="$(find robocoop_description)/config/ur3e_calibration.yaml"/>
+  <xacro:arg name="physical_params" default="$(find ur_description)/config/$(arg ur_type)/physical_parameters.yaml"/>
+  <xacro:arg name="visual_params" default="$(find ur_description)/config/$(arg ur_type)/visual_parameters.yaml"/>
+  <xacro:arg name="safety_limits" default="false"/>
+  <xacro:arg name="safety_pos_margin" default="0.15"/>
+  <xacro:arg name="safety_k_position" default="20"/>
+  <xacro:arg name="sim_gazebo" default="false"/>
+  <xacro:arg name="simulation_controllers" default=""/>
+  <!-- The Hand-E's simulation-only wrist spring (cell_description, for force
+       control against dartsim's rigid contacts), on with sim_gazebo. -->
+  <xacro:arg name="contact_compliance" default="$(arg sim_gazebo)"/>
+
+  <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
+  <xacro:include filename="$(find cell_description)/urdf/ur_gazebo.urdf.xacro"/>
+  <xacro:include filename="$(find cell_description)/urdf/robotiq_hande_module.urdf.xacro"/>
+  <xacro:include filename="$(find cell_description)/urdf/workcell_frame.urdf.xacro"/>
+  <xacro:include filename="$(find cell_description)/urdf/border.urdf.xacro"/>
+  <xacro:include filename="$(find robocoop_description)/urdf/robocoop_rig.urdf.xacro"/>
+
+  <link name="world"/>
+  <!-- The arm's input border (border.urdf.xacro), where base_link hangs. -->
+  <xacro:module_border type="ur" instance="arm" role="mount" parent="world"/>
+  <xacro:ur_robot
+    name="$(arg name)"
+    tf_prefix="$(arg tf_prefix)"
+    parent="arm_mount"
+    joint_limits_parameters_file="$(arg joint_limit_params)"
+    kinematics_parameters_file="$(arg kinematics_params)"
+    physical_parameters_file="$(arg physical_params)"
+    visual_parameters_file="$(arg visual_params)"
+    safety_limits="$(arg safety_limits)"
+    safety_pos_margin="$(arg safety_pos_margin)"
+    safety_k_position="$(arg safety_k_position)"
+    force_abs_paths="$(arg sim_gazebo)">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </xacro:ur_robot>
+
+
+  <!-- In Gazebo set up for dartsim, as the gantry's 2F-85. -->
+  <xacro:robotiq_hande_module parent="tool0" name="RobotiqGripperSim"
+                              sim_gazebo="$(arg sim_gazebo)" include_ros2_control="$(arg sim_gazebo)"
+                              contact_pads="$(arg sim_gazebo)"
+                              drive_mimic_finger="$(arg sim_gazebo)"
+                              raise_finger_velocity_limits="$(arg sim_gazebo)"
+                              contact_compliance="$(arg contact_compliance)"/>
+
+  <xacro:workcell_frame parent="world"/>
+
+  <!-- The rig, the hardware in no vendor package. -->
+  <xacro:robocoop_rig parent="world"/>
+
+
+  <xacro:if value="$(arg sim_gazebo)">
+    <!-- Gazebo never sees the cell. robocoop_cell_link has no inertial, so
+         sdformat drops it with its visuals and collisions when it converts
+         the description (checked with gz sdf -p). robocoop_sim's world has
+         the cell's collision boxes as a model of its own, which the arm
+         collides with too (Gazebo does not collide a model with itself). -->
+
+    <!-- The arm's Gazebo parts, see cell_description's ur_gazebo.urdf.xacro.
+         It starts in robocoop_home (cells/robocoop.yaml), the arm folded
+         over the table. With the wrist spring held parts hang on its gripper side. -->
+    <xacro:property name="grasp_parent" value="wrist_3_link"/>
+    <xacro:if value="$(arg contact_compliance)">
+      <xacro:property name="grasp_parent" value="robotiq_compliance_link"/>
+    </xacro:if>
+    <xacro:ur_gazebo
+        name="robocoop_arm" tf_prefix="$(arg tf_prefix)"
+        initial_positions="${dict(shoulder_pan_joint=1.5707, shoulder_lift_joint=-1.5707, elbow_joint=1.5707,
+                                  wrist_1_joint=-1.5707, wrist_2_joint=-1.5707, wrist_3_joint=0.0)}"
+        simulation_controllers="$(arg simulation_controllers)"
+        grasp_models_file="$(find robocoop_sim)/config/sim_gripper_driver.yaml"
+        grasp_parent="${grasp_parent}"/>
+  </xacro:if>
+
+  <!-- The real robot, ur_robot_driver's ros2_control block (cell_description's
+       ur_driver.urdf.xacro, how to start the driver with this description is
+       there); its mock hardware starts in robocoop_home. -->
+  <xacro:unless value="$(arg sim_gazebo)">
+    <xacro:include filename="$(find cell_description)/urdf/ur_driver.urdf.xacro"/>
+    <xacro:ur_driver
+        name="$(arg name)" tf_prefix="$(arg tf_prefix)" ur_type="$(arg ur_type)"
+        kinematics_params="$(arg kinematics_params)"
+        initial_positions="${dict(shoulder_pan_joint=1.5707, shoulder_lift_joint=-1.5707, elbow_joint=1.5707,
+                                  wrist_1_joint=-1.5707, wrist_2_joint=-1.5707, wrist_3_joint=0.0)}"/>
+  </xacro:unless>
+</robot>

@@ -1,0 +1,26 @@
+# photoneo_motioncam_m_plus.yaml
+# ------------------------------
+# Photoneo MotionCam-3D Color M+, a structured-light depth camera fixed in the
+# cell (depth_camera_module.urdf.xacro). What its driver does not publish is
+# here.
+#
+# No vendor description is used, and no driver is started yet. depth_range and
+# body (mass too) are datasheet values recalled, not checked against this camera. A cell
+# gives the pose in a calibration file of its own: it belongs to the camera's
+# place in that cell, not to the camera.
+
+module_class: sensor
+
+# base is the camera's own frame, on the optical axis at the front glass:
+# z out of the lens, x along the image's right, y along its down.
+frames: {mount: _mount, base: _link}
+
+capabilities:
+  rgb: true
+  depth: true
+  depth_range: {min: 0.63, max: 1.574}
+unverified: [depth_range]
+
+# The housing as a collision box, in the base frame; its mass for Gazebo, where
+# the camera stands fixed, so that it moves nothing.
+body: {size: [0.416, 0.068, 0.077], xyz: [0, 0, -0.0385], mass: 1.5}

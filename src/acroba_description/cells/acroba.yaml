@@ -1,0 +1,85 @@
+# acroba.yaml
+# -----------
+# The ACROBA demonstrator (BFH): a UR5e with a Robotiq 2F-85 on a table with a
+# frame behind the arm (acroba_description, which also holds the rig: the
+# cell mesh and the cable cover).
+#
+# A cell composition: which modules the cell is made of and how they are put
+# together. tools/generate_cell.py turns it, with the module descriptors in
+# cell_description/modules, into the cell's SRDF, kinematics, joint limits, MoveIt
+# controller list and controller-manager parameters, one set per variant in
+# acroba/<variant>/. tools/check_composition.py checks the result. Edit this
+# file or a module descriptor, then regenerate; never edit the generated
+# files. The format is described in cell_description/README.md.
+
+modules:
+  # Borders (cell_description/README.md, the cell template): each module's mount hangs on
+  # its parent; arm_mount on the cell's world, gripper_mount on tool0.
+  arm: {type: ur, model: ur5e, parent: world,
+        calibration: {package: acroba_description, file: config/ur5e_calibration.yaml}}
+  gripper: {type: robotiq_2f_85, parent: tool0}
+  # The depth camera, fixed in the cell, sometimes one model and sometimes the
+  # other. To change it, change type here, regenerate and rebuild: the
+  # description reads it from this file, and each camera has its own pose in
+  # its calibration file. check_composition.py also checks the alternatives.
+  camera: {type: zivid_one_plus_m, alternatives: [photoneo_motioncam_m_plus], parent: world,
+           calibration: {package: acroba_description, file: 'config/{type}_calibration.yaml'}}
+
+# safety_limits: the UR joints' soft limits, 0.15 rad inside the hard ones,
+# which the UR driver's ros2_control enforces by default (see gantry.yaml).
+urdf: {package: acroba_description, file: urdf/acroba.urdf.xacro,
+       args: {name: acroba, ur_type: ur5e, safety_limits: 'true', safety_pos_margin: '0.15'}}
+root: world
+tcp: {module: gripper}        # gripper_tcp, the gripper's tcp border
+
+groups:
+  ur_manipulator:
+    states:
+      # The demonstrator MoveIt configuration's home_arm
+      # (acroba_demonstrator_config acroba_demonstrator.srdf).
+      acroba_home: {shoulder_pan_joint: 1.57, shoulder_lift_joint: -1.57, elbow_joint: 1.57,
+                    wrist_1_joint: -1.57, wrist_2_joint: -1.57, wrist_3_joint: 0}
+planning_groups: [ur_manipulator]
+
+# The arm and gripper against the camera stay checked whatever the random
+# samples say: with another camera, or another pose, they can meet.
+keep_collisions:
+  - - [shoulder_link, upper_arm_link, forearm_link, 'wrist_*', cable_protection_link, 'robotiq_*', ur_to_robotiq_link]
+    - camera_link
+
+variants:
+  # Gazebo (acroba_sim, dartsim, as the gantry). MoveIt plans with the
+  # fingertip pads as the fingertips' collision geometry (the module's
+  # collision_replacements; the vanilla convex hulls are about twice the real
+  # fingertip) but without the springs, which are for Gazebo's physics only.
+  # Gazebo runs it with sim_gazebo (ros2_control blocks, wrist sensor, pads,
+  # wrist spring, rubber springs, finger velocity limits).
+  sim:
+    urdf_args: {contact_pads: 'true', contact_compliance: 'false'}
+    controller_manager: {update_rate: 500}
+    controllers:
+      # As on the gantry: the force-mode stand-in (force_mode_sim) needs
+      # the arm controller to start from the measured state, and a velocity
+      # controller to switch to; the wrist sensor gets a broadcaster.
+      scaled_joint_trajectory_controller:
+        params_files:
+          - {package: ur_simulation_gz, file: config/ur_controllers.yaml}
+          - {package: manipulation_skills, file: config/sim_force_controllers.yaml}
+      forward_velocity_controller:
+        type: forward_command_controller/ForwardCommandController
+        params_files: [{package: ur_simulation_gz, file: config/ur_controllers.yaml}]
+      tcp_fts_raw_broadcaster:
+        type: force_torque_sensor_broadcaster/ForceTorqueSensorBroadcaster
+        params_files: [{package: manipulation_skills, file: config/sim_force_controllers.yaml}]
+    gazebo:
+      urdf_args: {sim_gazebo: 'true', contact_pads: 'true', contact_compliance: 'true',
+                  simulation_controllers: unused}
+      # No parts yet; the check still compares world, grasp joints and driver.
+      grasp:
+        worlds:
+          - {package: acroba_sim, file: worlds/acroba.sdf}
+        graspable: 'part_\d+'
+        driver_params: {package: acroba_sim, file: config/sim_gripper_driver.yaml}
+  # The real cell, with ur_robot_driver (tf_prefix empty) and the robot's
+  # calibration (acroba_description/config/ur5e_calibration.yaml).
+  real: {}

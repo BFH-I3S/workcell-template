@@ -1,0 +1,134 @@
+# robotiq_hande.yaml
+# ------------------
+# Module descriptor of the Robotiq Hand-E gripper module
+# (urdf/robotiq_hande_module.urdf.xacro, wrapping robotiq_description's
+# robotiq_hand_e_macro from Robotiq's robotiq-ros), as the robocoop cell
+# carries it on its UR3e: its TCP, and what it adds to a cell's semantics
+# when a cell composes it (cells/*.yaml, tools/generate_cell.py). Read by the
+# module macro too; change the TCP here and nowhere else.
+#
+# WHERE THE TCP IS
+# The centre of the finger pads, as for the 2F-85 (robotiq_2f_85.yaml), from
+# the flange (tool0). Robotiq's description starts at the gripper's base; the
+# UR coupling under it is 11 mm, found by sliding Robotiq's housing mesh
+# along z against the robocoop cell's CAD of its assembly (coupling
+# included), best at 11.0 mm with a mean profile error of 0.19 mm. Then:
+#
+#   coupling             0 .. 11 mm
+#   gripper base         11 mm (Robotiq's hand_e_base_link)
+#   finger frames        110 mm (base + 99 mm)
+#   flat pad face        133 .. 157 mm (24 mm, finger frame 23 .. 47 mm)
+#   pad centre           145 mm   <- the TCP
+#   fingertips           157 mm, i.e. 12 mm past the TCP
+#
+# The robocoop CAD gives the same pad (133 .. 157 mm). The fingers move
+# parallel, so the pad centre stays at 145 mm over the whole stroke.
+# Robotiq's own tcp_link is at 143.5 mm, robocoop's tcp_link at 157 mm (the
+# fingertips).
+tcp:
+  xyz: [0.0, 0.0, 0.145]    # metres, from the module's mount
+  rpy: [0.0, 0.0, 0.0]      # roll, pitch, yaw in radians, URDF <origin> order
+
+module_class: gripper
+
+# Borders (the cell template, cell_description/README.md): the module's input border
+# `mount` and its output borders, by role. A name starting with `_` is the
+# instance's name plus it (`gripper` -> gripper_mount, gripper_tcp).
+frames: {mount: _mount, tcp: _tcp}
+
+# The driven finger joint; the right finger mimics it.
+joints: [hande_left_finger_joint]
+
+# grasp_width is the model's stroke (2 x 0.025). grip_force and payload are
+# datasheet values (Robotiq Hand-E: 20-185 N, 5 kg form-fit), not measured
+# here.
+capabilities:
+  grasp_width: {min: 0.0, max: 0.05}
+  grip_force: {min: 20.0, max: 185.0}
+  payload: 5.0
+unverified: [grip_force, payload]
+
+# How the module announcer tells that the gripper works: on the real cell
+# robotiq_gripper_bridge publishes the finger position at 10 Hz.
+liveness:
+  topic: {name: /gripper/position, type: std_msgs/msg/Float32}
+
+# The module's SRDF group: the driven finger joint only, not the links (see
+# robotiq_2f_85.yaml: listing the links pulls the fixed tool0 joint into the
+# group, which broke IK for the TCP there). Never part of an arm's planning
+# group.
+groups:
+  gripper:
+    joints: [hande_left_finger_joint]
+    # Per finger, 0 fully open, 0.025 fully closed (the macro's limits).
+    states:
+      open: {hande_left_finger_joint: 0.0}
+      closed: {hande_left_finger_joint: 0.025}
+
+# The gripper as the skills reason about it (condition_skill
+# common/gripper_geometry.py; composition.gripper_geometry hands it every
+# skill node as gripper.*): the commanded stroke when fully closed, finger
+# gap per metre of stroke, the stroke at or below which it counts as open
+# and at or beyond which it has closed on nothing, and how far the
+# fingertips reach past the TCP, open and closed. The full gap is
+# grasp_width's max, the finger joint and its closed value the gripper
+# group's `closed` state.
+geometry:
+  max_stroke: 0.05
+  # Parallel fingers.
+  gap_per_stroke: 1.0
+  # 3 mm from either end of the 50 mm stroke: a 40 mm brick is gripped at
+  # 10 mm, any part from about 3 to 47 mm wide counts as held.
+  open_threshold: 0.003
+  closed_threshold: 0.047
+  # Fingertips 157 mm from the flange, the TCP at 145 mm; parallel fingers,
+  # the same open and closed.
+  finger_reach: 0.012
+  closed_tip_below_tcp: 0.012
+
+# Robotiq's ros2_control driver on the real cell (manipulation_skills
+# robotiq_gripper.launch.py, robotiq_gripper_bridge): the model name in
+# robotiq_description, and the gripper controller's goal_tolerance in the
+# joint's unit (Robotiq's launch file's per-model value). The driven joint is
+# `joints` above, its closed position the gripper group's `closed` state, the
+# stroke grasp_width's max.
+driver:
+  robotiq_model: hand_e
+  goal_tolerance: 0.0005
+
+end_effector: gripper
+
+controllers:
+  # In Gazebo the finger joint is commanded directly; sim_gripper_driver
+  # turns the skills' stroke in metres into it (as for the 2F-85, same
+  # controller name).
+  sim:
+    robotiq_gripper_controller:
+      type: forward_command_controller/ForwardCommandController
+      params:
+        joints: [hande_left_finger_joint]
+        interface_name: position
+  # On the real cell Robotiq's ros2_control driver runs in a controller
+  # manager of its own (/robotiq/controller_manager, manipulation_skills
+  # robotiq_gripper.launch.py), from robotiq_description's configuration;
+  # robotiq_gripper_bridge gives the skills their GripperCommand on top.
+  # MoveIt reaches the gripper through moveit_controllers below.
+  real:
+    robotiq_gripper_controller:
+      type: robotiq_controllers/GripperActionController
+      params_files: [{package: robotiq_description, file: config/robotiq_controllers.yaml}]
+    robotiq_activation_controller:
+      type: robotiq_controllers/RobotiqActivationController
+      params_files: [{package: robotiq_description, file: config/robotiq_controllers.yaml}]
+
+# What MoveIt executes the gripper group on (RViz's MotionPlanning panel,
+# every variant): manipulation_skills' moveit_gripper_bridge serves
+# gripper_controller/joint_cmd, a GripperCommand in the driven joint's unit,
+# and forwards it as the skills' stroke to whichever driver runs. No
+# ros2_control controller has this name. The group stays out of every arm
+# group, so a plan never moves the fingers along the way.
+moveit_controllers:
+  gripper_controller:
+    type: GripperCommand
+    action_ns: joint_cmd
+    default: true
