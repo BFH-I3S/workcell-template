@@ -63,4 +63,5 @@ MoveIt plans for the arm and does not move the fingers.
 
 ## License
 
-Apache-2.0, see [LICENSE](LICENSE). Vendor packages keep their own licences.
+Copyright 2026 Berner Fachhochschule (BFH). Apache-2.0, see [LICENSE](LICENSE) and
+[NOTICE](NOTICE). Vendor packages keep their own licences.
